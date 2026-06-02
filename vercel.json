@@ -1,5 +1,5 @@
 {
   "rewrites": [
-    { "source": "/", "destination": "/eduayo-v7-16-anglais-premiere-4-3-3.html" }
+    { "source": "/", "destination": "/eduayo-auth.html" }
   ]
 }
