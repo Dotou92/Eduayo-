@@ -700,6 +700,7 @@
   }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -764,20 +765,39 @@
       <button class="btn btn-primary" onclick="nextStep(1)">Continuer →</button>
     </div>
 
-    <!-- ÉTAPE 2 — Email -->
+    <!-- ÉTAPE 2 — Connexion / Inscription -->
     <div class="onboarding-step" id="step-2" style="background:linear-gradient(160deg,#007A4D,#00A86B 60%,#00C97F);display:none;">
       <div class="onboarding-progress">
         <div class="prog-dot"></div><div class="prog-dot active"></div><div class="prog-dot"></div><div class="prog-dot"></div>
       </div>
-      <div class="onboarding-emoji">📧</div>
-      <div class="onboarding-title">Ton adresse email</div>
-      <div class="onboarding-desc">Elle servira à recevoir tes confirmations et récapitulatifs de progression.</div>
-      <input id="user-email-input" type="email" placeholder="exemple@gmail.com"
+      <div class="onboarding-emoji">🔐</div>
+      <div class="onboarding-title" id="auth-title">Crée ton compte</div>
+      <div class="onboarding-desc" id="auth-desc">Pour accéder à EduAyo, crée un compte gratuit.</div>
+
+      <!-- Tabs -->
+      <div style="display:flex;gap:8px;margin-bottom:20px;width:100%;">
+        <button id="tab-inscription" onclick="switchAuthTab('inscription')"
+          style="flex:1;padding:10px;border-radius:10px;border:2px solid white;background:white;color:#007A4D;font-weight:700;font-family:'Nunito',sans-serif;cursor:pointer;font-size:14px;">
+          Inscription
+        </button>
+        <button id="tab-connexion" onclick="switchAuthTab('connexion')"
+          style="flex:1;padding:10px;border-radius:10px;border:2px solid rgba(255,255,255,0.5);background:transparent;color:white;font-weight:700;font-family:'Nunito',sans-serif;cursor:pointer;font-size:14px;">
+          Connexion
+        </button>
+      </div>
+
+      <input id="user-email-input" type="email" placeholder="Ton adresse email"
         style="width:100%;padding:16px 18px;border-radius:14px;border:2px solid rgba(255,255,255,0.4);background:rgba(255,255,255,0.15);color:white;font-size:16px;font-family:'Nunito',sans-serif;outline:none;margin-bottom:12px;box-sizing:border-box;"
         oninput="this.style.borderColor='rgba(255,255,255,0.8)'">
-      <div style="font-size:11px;color:rgba(255,255,255,0.65);margin-bottom:24px;text-align:center;">🔒 Ton email ne sera jamais partagé à des tiers</div>
-      <button class="btn btn-primary" onclick="nextStep(2)">Continuer →</button>
-      <button onclick="skipEmail()" style="background:none;border:none;color:rgba(255,255,255,0.65);font-size:13px;margin-top:12px;cursor:pointer;font-family:'Nunito',sans-serif;display:block;width:100%;text-align:center;">Passer cette étape</button>
+
+      <input id="user-password-input" type="password" placeholder="Mot de passe (min. 6 caractères)"
+        style="width:100%;padding:16px 18px;border-radius:14px;border:2px solid rgba(255,255,255,0.4);background:rgba(255,255,255,0.15);color:white;font-size:16px;font-family:'Nunito',sans-serif;outline:none;margin-bottom:20px;box-sizing:border-box;"
+        oninput="this.style.borderColor='rgba(255,255,255,0.8)'">
+
+      <div id="auth-error" style="color:#ffcccc;font-size:13px;margin-bottom:12px;text-align:center;display:none;"></div>
+
+      <button class="btn btn-primary" id="auth-btn" onclick="handleAuth()">Créer mon compte →</button>
+      <div style="font-size:11px;color:rgba(255,255,255,0.65);margin-top:12px;text-align:center;">🔒 Tes données sont sécurisées</div>
     </div>
 
     <!-- ÉTAPE 3 — Classe -->
@@ -825,7 +845,7 @@
   <div class="topbar">
     <div class="topbar-logo">EduAyo</div>
     <div style="display:flex;gap:8px;align-items:center;">
-      <button class="topbar-notif" id="notif-btn" onclick="showNotifSummary()">🔔<span class="notif-badge" style="display:none;"></span></button>
+      <button class="topbar-notif" onclick="showToast('🔔 Aucune notification')">🔔<span class="notif-badge"></span></button>
       <div class="topbar-avatar" id="home-avatar" onclick="goToScreen('profile')">A</div>
     </div>
   </div>
@@ -835,8 +855,8 @@
       <div class="hero-name" id="hero-name">Apprenant !</div>
       <div class="hero-sub">Continue ta progression. Tu es sur la bonne voie !</div>
       <div class="hero-stats">
-        <div class="hero-stat"><div class="hero-stat-val"><span id="hero-streak-emoji">💤</span> <span id="hero-streak-val">0</span></div><div class="hero-stat-lbl">Jours consécutifs</div></div>
-        <div class="hero-stat"><div class="hero-stat-val" id="home-pts">0</div><div class="hero-stat-lbl">Points gagnés</div></div>
+        <div class="hero-stat"><div class="hero-stat-val">7</div><div class="hero-stat-lbl">Jours consécutifs</div></div>
+        <div class="hero-stat"><div class="hero-stat-val" id="home-pts">120</div><div class="hero-stat-lbl">Points gagnés</div></div>
       </div>
     </div>
     <div class="diag-card" onclick="openDiagnostic()">
@@ -847,7 +867,18 @@
     <div class="section-header"><div class="section-title">📚 Mes matières</div></div>
     <div class="subjects-grid" id="subjects-grid"></div>
     <div class="section-header"><div class="section-title">⚡ Activité récente</div></div>
-    <div class="activity-list"></div>
+    <div class="activity-list">
+      <div class="activity-item" onclick="openSubject(SUBJECTS[0])">
+        <div class="activity-icon" style="background:#E8F4FF;">➕</div>
+        <div><div class="activity-text-title">Mathématiques</div><div class="activity-text-sub">Fractions — il y a 2h</div></div>
+        <div class="activity-score">85%</div>
+      </div>
+      <div class="activity-item" onclick="openSubject(SUBJECTS[1])">
+        <div class="activity-icon" style="background:#EAF3FB;">📖</div>
+        <div><div class="activity-text-title">Français</div><div class="activity-text-sub">Grammaire — hier</div></div>
+        <div class="activity-score">72%</div>
+      </div>
+    </div>
     <div style="height:16px;"></div>
   </div>
   <nav class="bottom-nav">
@@ -934,7 +965,7 @@
       <div class="eval-hero-stats">
         <div class="eval-hero-stat"><div class="eval-hero-stat-val">10</div><div class="eval-hero-stat-lbl">Questions</div></div>
         <div class="eval-hero-stat"><div class="eval-hero-stat-val">IA</div><div class="eval-hero-stat-lbl">Correction</div></div>
-        <div class="eval-hero-stat" id="eval-level-stat"><div class="eval-hero-stat-val" id="eval-level-val">—</div><div class="eval-hero-stat-lbl">Mon niveau</div></div>
+        <div class="eval-hero-stat"><div class="eval-hero-stat-val">100%</div><div class="eval-hero-stat-lbl">Programme officiel</div></div>
       </div>
     </div>
     <div class="eval-sa-section">
@@ -1045,7 +1076,7 @@
       <div class="profile-avatar-big" id="profile-avatar-big">A</div>
       <div class="profile-name" id="profile-name">Apprenant</div>
       <div class="profile-class" id="profile-class">Classe non définie</div>
-      <div class="profile-badges"></div>
+      <div class="profile-badges"><span class="badge">🔥 7 jours</span><span class="badge">⭐ 120 pts</span><span class="badge">🏆 Actif</span></div>
     </div>
     <div class="profile-menu">
       <div class="menu-section-title">Mon compte</div>
@@ -1385,220 +1416,6 @@ function downloadAsPDF(text, filename) {
 
     doc.save(filename || 'eduayo-reponse.pdf');
     showToast('✅ PDF téléchargé !');
-  } catch(e) {
-    showToast('⚠️ Erreur PDF : ' + e.message);
-    console.error(e);
-  }
-}
-
-
-// ============================================================
-// PDF BILAN D'ÉVALUATION
-// ============================================================
-function downloadBilanPDF() {
-  try {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-
-    const margin = 15;
-    const pageW  = doc.internal.pageSize.getWidth();
-    const pageH  = doc.internal.pageSize.getHeight();
-    const maxW   = pageW - margin * 2;
-    let y = 0;
-
-    const scores   = evalState.scores;
-    const total    = scores.length;
-    const correct  = scores.filter(s => s.verdict === 'correct').length;
-    const partial  = scores.filter(s => s.verdict === 'partial').length;
-    const incorrect= scores.filter(s => s.verdict === 'incorrect').length;
-    const pts      = scores.reduce((a, s) => a + (s.score || 0), 0);
-    const pct      = Math.round((pts / (total * 2)) * 100);
-
-    const matiere  = evalState.subject?.name  || '';
-    const niveau   = evalState.classe?.niveau || '';
-    const saLabel  = evalState.saKey === 'all'
-      ? 'Programme complet'
-      : (evalState.seqNum !== null
-          ? `${evalState.classe?.programme?.[evalState.saKey]?.titre?.split('—')[0]?.trim() || evalState.saKey} — Séq. ${evalState.seqNum}`
-          : (evalState.classe?.programme?.[evalState.saKey]?.titre || evalState.saKey));
-    const lvl      = appState.currentLevel || 'Débutant';
-    const nom      = appState.userName || 'Apprenant';
-    const date     = new Date().toLocaleDateString('fr-FR', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
-    const heure    = new Date().toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
-
-    const scoreColor = pct >= 75 ? [46,125,50] : pct >= 50 ? [245,127,23] : pct >= 25 ? [230,81,0] : [198,40,40];
-
-    // ── EN-TÊTE ──────────────────────────────────────────────
-    doc.setFillColor(13, 71, 161);
-    doc.rect(0, 0, pageW, 28, 'F');
-    // Accent couleur selon matière
-    doc.setFillColor(21, 101, 192);
-    doc.rect(0, 24, pageW, 4, 'F');
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('EduAyo', margin, 12);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Cabinet La Lumière — SAVI Dotou Isaac', margin, 19);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text('BILAN D\'ÉVALUATION DIAGNOSTIQUE', pageW - margin, 12, { align: 'right' });
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(date + ' · ' + heure, pageW - margin, 19, { align: 'right' });
-    y = 36;
-
-    // ── IDENTITÉ ÉLÈVE ────────────────────────────────────────
-    doc.setFillColor(240, 244, 255);
-    doc.roundedRect(margin, y, maxW, 22, 3, 3, 'F');
-    doc.setTextColor(13, 71, 161);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text(nom, margin + 4, y + 8);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(60, 60, 80);
-    doc.text(matiere + ' · ' + niveau, margin + 4, y + 15);
-    doc.setFont('helvetica', 'italic');
-    doc.setFontSize(8);
-    doc.setTextColor(100, 110, 130);
-    doc.text('Niveau : ' + lvl + '  |  P\u00e9rim\u00e8tre : ' + saLabel.substring(0, 70), margin + 4, y + 21);
-    y += 28;
-
-    // ── SCORE GLOBAL ──────────────────────────────────────────
-    // Fond de jauge
-    doc.setFillColor(225, 225, 235);
-    doc.roundedRect(margin, y, maxW, 24, 3, 3, 'F');
-    // Remplissage de jauge
-    const jaugeW = Math.max(4, (maxW - 8) * pct / 100);
-    doc.setFillColor(...scoreColor);
-    doc.roundedRect(margin + 4, y + 14, jaugeW, 5, 2, 2, 'F');
-    // Score texte
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(28);
-    doc.setTextColor(...scoreColor);
-    doc.text(pct + '%', margin + 6, y + 11);
-    // Label
-    let label = pct >= 80 ? 'Excellent !' : pct >= 60 ? 'Bien !' : pct >= 40 ? 'En progression' : 'À retravailler';
-    doc.setFontSize(10);
-    doc.setTextColor(60, 60, 80);
-    doc.text(label, margin + 40, y + 9);
-    // Mini stats
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(46, 125, 50);
-    doc.text('✓ ' + correct + ' correct' + (correct > 1 ? 's' : ''), pageW - margin - 60, y + 7);
-    doc.setTextColor(245, 127, 23);
-    doc.text('~ ' + partial + ' partiel' + (partial > 1 ? 's' : ''), pageW - margin - 60, y + 13);
-    doc.setTextColor(198, 40, 40);
-    doc.text('✗ ' + incorrect + ' à revoir', pageW - margin - 60, y + 19);
-    y += 30;
-
-    // ── DÉTAIL PAR QUESTION ───────────────────────────────────
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10);
-    doc.setTextColor(13, 71, 161);
-    doc.text('D\u00e9tail des r\u00e9ponses', margin, y);
-    y += 5;
-    doc.setDrawColor(200, 210, 230);
-    doc.setLineWidth(0.3);
-    doc.line(margin, y, pageW - margin, y);
-    y += 4;
-
-    scores.forEach((s, i) => {
-      const isCorrect = s.verdict === 'correct';
-      const isPartial = s.verdict === 'partial';
-      const bgColor   = isCorrect ? [232, 245, 233] : isPartial ? [255, 248, 225] : [255, 235, 238];
-      const txtColor  = isCorrect ? [27, 94, 32]    : isPartial ? [230, 81, 0]    : [183, 28, 28];
-      const icon      = isCorrect ? '✓' : isPartial ? '~' : '✗';
-
-      // Question block
-      const qLines  = doc.splitTextToSize((i + 1) + '. ' + (s.question || ''), maxW - 14);
-      const fbLines = s.feedback ? doc.splitTextToSize('→ ' + s.feedback.split('\n').join(' '), maxW - 14) : [];
-      const blockH  = (qLines.length + fbLines.length) * 4.5 + 8;
-
-      if (y + blockH > pageH - 18) {
-        doc.addPage();
-        // Mini header
-        doc.setFillColor(13, 71, 161);
-        doc.rect(0, 0, pageW, 10, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.text('EduAyo — Bilan d\'évaluation · ' + nom, margin, 7);
-        doc.setTextColor(30, 30, 50);
-        y = 16;
-      }
-
-      doc.setFillColor(...bgColor);
-      doc.roundedRect(margin, y, maxW, blockH, 2, 2, 'F');
-
-      // Icon badge
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(...txtColor);
-      doc.text(icon, margin + 3, y + 5.5);
-
-      // Question text
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8.5);
-      doc.setTextColor(30, 30, 50);
-      let lineY = y + 5.5;
-      qLines.forEach(l => { doc.text(l, margin + 9, lineY); lineY += 4.5; });
-
-      // Feedback text
-      if (fbLines.length) {
-        doc.setFont('helvetica', 'italic');
-        doc.setFontSize(7.5);
-        doc.setTextColor(80, 90, 110);
-        fbLines.forEach(l => { doc.text(l, margin + 9, lineY); lineY += 4.2; });
-      }
-
-      y += blockH + 3;
-    });
-
-    // ── SYNTHÈSE LACUNES ─────────────────────────────────────
-    const failed = scores.filter(s => s.verdict !== 'correct');
-    if (failed.length > 0) {
-      if (y + 20 > pageH - 18) { doc.addPage(); y = 16; }
-      y += 3;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(13, 71, 161);
-      doc.text('Points \u00e0 retravailler (' + failed.length + ')', margin, y);
-      y += 5;
-      doc.setDrawColor(200, 210, 230);
-      doc.line(margin, y, pageW - margin, y);
-      y += 4;
-      failed.forEach((s, i) => {
-        const lines = doc.splitTextToSize('• ' + (s.question || ''), maxW);
-        if (y + lines.length * 4.5 + 2 > pageH - 18) { doc.addPage(); y = 16; }
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8.5);
-        doc.setTextColor(60, 60, 80);
-        lines.forEach(l => { doc.text(l, margin + 2, y); y += 4.3; });
-        y += 1;
-      });
-    }
-
-    // ── PIED DE PAGE ──────────────────────────────────────────
-    const totalPages = doc.internal.getNumberOfPages();
-    for (let p = 1; p <= totalPages; p++) {
-      doc.setPage(p);
-      doc.setFillColor(240, 244, 255);
-      doc.rect(0, pageH - 12, pageW, 12, 'F');
-      doc.setFont('helvetica', 'italic');
-      doc.setFontSize(7.5);
-      doc.setTextColor(100, 120, 160);
-      doc.text('Généré par EduAyo \u00b7 Cabinet La Lumi\u00e8re \u00b7 SAVI Dotou Isaac', pageW / 2, pageH - 5, { align: 'center' });
-      doc.text('Page ' + p + ' / ' + totalPages, pageW - margin, pageH - 5, { align: 'right' });
-    }
-
-    const filename = `bilan-${matiere.toLowerCase().replace(/\s+/g,'-')}-${niveau.toLowerCase().replace(/\s+/g,'-')}-${new Date().toLocaleDateString('fr-FR').replace(/\//g,'-')}.pdf`;
-    doc.save(filename);
-    showToast('✅ Bilan PDF téléchargé !');
   } catch(e) {
     showToast('⚠️ Erreur PDF : ' + e.message);
     console.error(e);
@@ -15823,8 +15640,6 @@ function saveState() {
       userObjectif: appState.userObjectif,
       currentLevel: appState.currentLevel,
       points: appState.points,
-      streak: appState.streak,
-      lastEvalDate: appState.lastEvalDate,
     };
     localStorage.setItem(LS_KEY, JSON.stringify(toSave));
   } catch(e) {}
@@ -15839,10 +15654,8 @@ function loadState() {
     appState.userClass    = saved.userClass    || '';
     appState.userEmail    = saved.userEmail    || '';
     appState.userObjectif = saved.userObjectif || '';
-    appState.currentLevel  = saved.currentLevel  || 'Débutant';
-    appState.points        = saved.points        || 0;
-    appState.streak        = saved.streak        || 0;
-    appState.lastEvalDate  = saved.lastEvalDate  || null;
+    appState.currentLevel = saved.currentLevel || 'Débutant';
+    appState.points       = saved.points       || 0;
   } catch(e) {}
 }
 
@@ -15852,11 +15665,6 @@ function saveEvalResult(result) {
     history.unshift(result);
     const trimmed = history.slice(0, 50); // garder les 50 dernières sessions
     localStorage.setItem(LS_HIST_KEY, JSON.stringify(trimmed));
-    // Recalculer le streak après chaque évaluation
-    appState.lastEvalDate = result.date;
-    computeStreak();
-    // Rafraîchir l'activité récente si on est sur home
-    renderActivityList();
   } catch(e) {}
 }
 
@@ -15870,8 +15678,6 @@ function getEvalHistory() {
 let appState = {
   userName: 'Apprenant',
   userClass: '',
-  streak: 0,
-  lastEvalDate: null,
   userEmail: '',
   userObjectif: '',
   currentSubject: null,
@@ -15940,6 +15746,80 @@ const EMAILJS_SERVICE_ID  = 'YOUR_SERVICE_ID';   // ex: service_abc123
 const EMAILJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';  // ex: template_xyz789
 const EMAILJS_PUBLIC_KEY  = 'YOUR_PUBLIC_KEY';   // ex: aBcDeFgHiJkLmNoPq
 
+// ============================================================
+// SUPABASE AUTH
+// ============================================================
+const SUPABASE_URL = 'https://dkxwltsmxnpqbgbeyqhx.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Bs-4nFV-JlmeyuruLiJqdQ_rfhGmvB9';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let authMode = 'inscription';
+
+function switchAuthTab(mode) {
+  authMode = mode;
+  const btnInscription = document.getElementById('tab-inscription');
+  const btnConnexion = document.getElementById('tab-connexion');
+  const authBtn = document.getElementById('auth-btn');
+  if (mode === 'inscription') {
+    btnInscription.style.background = 'white';
+    btnInscription.style.color = '#007A4D';
+    btnConnexion.style.background = 'transparent';
+    btnConnexion.style.color = 'white';
+    authBtn.textContent = 'Créer mon compte →';
+  } else {
+    btnConnexion.style.background = 'white';
+    btnConnexion.style.color = '#007A4D';
+    btnInscription.style.background = 'transparent';
+    btnInscription.style.color = 'white';
+    authBtn.textContent = 'Se connecter →';
+  }
+}
+
+async function handleAuth() {
+  const email = document.getElementById('user-email-input').value.trim();
+  const password = document.getElementById('user-password-input').value.trim();
+  const errorDiv = document.getElementById('auth-error');
+  const authBtn = document.getElementById('auth-btn');
+
+  if (!email || !password) { errorDiv.textContent = '⚠️ Remplis tous les champs'; errorDiv.style.display = 'block'; return; }
+  if (password.length < 6) { errorDiv.textContent = '⚠️ Mot de passe trop court (min. 6 caractères)'; errorDiv.style.display = 'block'; return; }
+
+  authBtn.textContent = '⏳ Chargement...';
+  authBtn.disabled = true;
+  errorDiv.style.display = 'none';
+
+  try {
+    let result;
+    if (authMode === 'inscription') {
+      result = await supabase.auth.signUp({ email, password });
+      if (result.error) throw result.error;
+      // Save profile
+      await supabase.from('profils').upsert({
+        id: result.data.user.id,
+        nom: appState.userName,
+        email: email,
+        plan: 'gratuit'
+      });
+      showToast('✅ Compte créé ! Vérifie ton email.');
+    } else {
+      result = await supabase.auth.signInWithPassword({ email, password });
+      if (result.error) throw result.error;
+    }
+    appState.userEmail = email;
+    document.getElementById('step-2').style.display = 'none';
+    document.getElementById('step-3').style.display = 'flex';
+  } catch(e) {
+    let msg = e.message;
+    if (msg.includes('already registered')) msg = '⚠️ Cet email est déjà utilisé. Connecte-toi.';
+    if (msg.includes('Invalid login')) msg = '⚠️ Email ou mot de passe incorrect.';
+    errorDiv.textContent = msg;
+    errorDiv.style.display = 'block';
+  } finally {
+    authBtn.textContent = authMode === 'inscription' ? 'Créer mon compte →' : 'Se connecter →';
+    authBtn.disabled = false;
+  }
+}
+
 function nextStep(step) {
   if (step === 1) {
     const nameVal = document.getElementById('user-name-input').value.trim();
@@ -15947,16 +15827,6 @@ function nextStep(step) {
     appState.userName = nameVal;
     document.getElementById('step-1').style.display = 'none';
     document.getElementById('step-2').style.display = 'flex';
-    return;
-  }
-  if (step === 2) {
-    const emailVal = document.getElementById('user-email-input').value.trim();
-    if (emailVal && !emailVal.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-      showToast('📧 Adresse email invalide'); return;
-    }
-    appState.userEmail = emailVal;
-    document.getElementById('step-2').style.display = 'none';
-    document.getElementById('step-3').style.display = 'flex';
     return;
   }
   if (step === 3) {
@@ -16011,149 +15881,18 @@ async function sendWelcomeEmail() {
 }
 
 // ============================================================
-// STREAK & DYNAMIC HOME
-// ============================================================
-
-function computeStreak() {
-  // Calcule le streak depuis l'historique des évaluations
-  const history = getEvalHistory();
-  if (!history.length) { appState.streak = 0; return; }
-
-  // Collecter les dates uniques d'éval (format dd/mm/yyyy)
-  const dates = [...new Set(history.map(h => h.date))];
-  // Convertir en objets Date (format FR dd/mm/yyyy)
-  const parsed = dates.map(d => {
-    const [day, month, year] = d.split('/');
-    return new Date(year, month - 1, day);
-  }).sort((a, b) => b - a); // du plus récent au plus ancien
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-
-  // Si dernière activité n'est ni aujourd'hui ni hier → streak = 0
-  const last = parsed[0];
-  last.setHours(0, 0, 0, 0);
-  if (last < yesterday) { appState.streak = 0; saveState(); return; }
-
-  // Compter les jours consécutifs
-  let streak = 1;
-  for (let i = 1; i < parsed.length; i++) {
-    const prev = new Date(parsed[i - 1]); prev.setHours(0, 0, 0, 0);
-    const curr = new Date(parsed[i]);     curr.setHours(0, 0, 0, 0);
-    const diff = Math.round((prev - curr) / 86400000);
-    if (diff === 1) { streak++; } else { break; }
-  }
-  appState.streak = streak;
-  saveState();
-}
-
-function getStreakEmoji(streak) {
-  if (streak === 0) return '💤';
-  if (streak < 3)  return '🌱';
-  if (streak < 7)  return '🔥';
-  if (streak < 14) return '⚡';
-  return '🏆';
-}
-
-function getHeroMessage() {
-  const history = getEvalHistory();
-  const count = history.length;
-  if (count === 0) return 'Commence ton premier diagnostic pour voir ta progression !';
-  if (appState.streak >= 7) return `${appState.streak} jours de suite — tu es en feu ! 🔥`;
-  if (appState.streak >= 3) return `${appState.streak} jours consécutifs. Continue comme ça !`;
-  const last = history[0];
-  if (last) return `Dernière session : ${last.matiere} · ${last.sa} · ${last.score}%`;
-  return 'Continue ta progression. Tu es sur la bonne voie !';
-}
-
-function renderActivityList() {
-  const list = document.querySelector('.activity-list');
-  if (!list) return;
-  const history = getEvalHistory();
-  if (!history.length) {
-    list.innerHTML = `<div style="text-align:center;padding:24px 16px;color:var(--text-soft);font-size:13px;font-weight:600;">
-      <div style="font-size:32px;margin-bottom:8px;">📭</div>
-      Aucune évaluation encore.<br>Lance ton premier diagnostic !
-    </div>`;
-    return;
-  }
-  const recent = history.slice(0, 5);
-  const SUBJ_EMOJI = {};
-  SUBJECTS.forEach(s => SUBJ_EMOJI[s.name] = s.emoji);
-  list.innerHTML = recent.map(h => {
-    const score = h.score;
-    const color = score >= 75 ? '#2E7D32' : score >= 50 ? '#F57F17' : '#C62828';
-    const emoji = SUBJ_EMOJI[h.matiere] || '📚';
-    const bg    = score >= 75 ? '#E8F5E9' : score >= 50 ? '#FFF8E1' : '#FFEBEE';
-    return `<div class="activity-item">
-      <div class="activity-icon" style="background:${bg};">${emoji}</div>
-      <div>
-        <div class="activity-text-title">${h.matiere} · ${h.classe}</div>
-        <div class="activity-text-sub">${h.sa} · ${h.date} ${h.heure || ''}</div>
-      </div>
-      <div class="activity-score" style="color:${color};">${score}%</div>
-    </div>`;
-  }).join('');
-}
-
-function renderProfileBadges() {
-  const container = document.querySelector('.profile-badges');
-  if (!container) return;
-  const history = getEvalHistory();
-  const count = history.length;
-  const badges = [];
-
-  // Streak badge
-  const s = appState.streak;
-  if (s > 0) badges.push(`${getStreakEmoji(s)} ${s} jour${s > 1 ? 's' : ''}`);
-  else        badges.push('💤 Inactif');
-
-  // Points badge
-  const pts = appState.points;
-  if (pts > 0) badges.push(`⭐ ${pts} pts`);
-
-  // Niveau badge conditionnel
-  if (count === 0)        badges.push('🆕 Nouveau');
-  else if (count < 5)    badges.push('🌱 Débutant');
-  else if (count < 15)   badges.push('📈 Régulier');
-  else if (count < 30)   badges.push('🏆 Assidu');
-  else                   badges.push('🎓 Expert');
-
-  container.innerHTML = badges.map(b => `<span class="badge">${b}</span>`).join('');
-}
-
-// ============================================================
 // HOME SETUP
 // ============================================================
 function setupHome() {
-  computeStreak();
-  const av = appState.userName.charAt(0).toUpperCase();
-
-  // Hero
   document.getElementById('hero-name').textContent = appState.userName + ' !';
   document.getElementById('home-pts').textContent = appState.points;
-  const heroStreak = document.getElementById('hero-streak-val');
-  if (heroStreak) heroStreak.textContent = appState.streak;
-  const heroStreakEmoji = document.getElementById('hero-streak-emoji');
-  if (heroStreakEmoji) heroStreakEmoji.textContent = getStreakEmoji(appState.streak);
-  const heroSub = document.querySelector('.hero-sub');
-  if (heroSub) heroSub.textContent = getHeroMessage();
-
-  // Avatar & profil
+  const av = appState.userName.charAt(0).toUpperCase();
   document.getElementById('home-avatar').textContent = av;
   document.getElementById('profile-name').textContent = appState.userName;
   document.getElementById('profile-class').textContent = appState.userClass || 'Niveau non défini';
   document.getElementById('profile-avatar-big').textContent = av;
-
-  // Notification badge : masquer si aucun historique, sinon montrer nb sessions
-  const notifBadge = document.querySelector('.notif-badge');
-  if (notifBadge) notifBadge.style.display = 'none'; // pas de fausses notifs
-
   renderSubjectsGrid();
   renderProgressList();
-  renderActivityList();
-  renderProfileBadges();
 }
 
 function renderSubjectsGrid() {
@@ -17010,8 +16749,7 @@ const evalState = {
   questions: [],
   currentQ: 0,
   scores: [],
-  sessionActive: false,
-  levelCfg: null   // config niveau injectée au démarrage de la session
+  sessionActive: false
 };
 
 const SA_EMOJIS = { sa1:'🌌', sa2:'⚗️', sa3:'🔄', sa4:'🧪', sa5:'🔭', sa6:'⚛️', sa7:'📐', sa8:'🔬', ls1:'👶', ls2:'💻', ls3:'🥁', ls4:'🏆', ls5:'💼', ls6:'🌊', ls7:'📖', ls8:'✍️' };
@@ -17030,8 +16768,6 @@ function openEvalScreen() {
   evalState.classe = classe;
 
   document.getElementById('eval-hero-classe').textContent = s.name + ' · ' + classe.niveau;
-  const lvlVal = document.getElementById('eval-level-val');
-  if (lvlVal) lvlVal.textContent = appState.currentLevel || 'Débutant';
 
   const list = document.getElementById('eval-sa-list');
   list.innerHTML = '';
@@ -17117,40 +16853,6 @@ function toggleSaExpand(saKey) {
   if (!isOpen) { seqList.classList.add('open'); card.classList.add('expanded'); }
 }
 
-// ============================================================
-// CONFIGURATION PAR NIVEAU
-// ============================================================
-function getLevelConfig(level) {
-  switch(level) {
-    case 'Avancé':
-      return {
-        label: 'Avancé',
-        questionStyle: `Génère des questions de niveau AVANCÉ : privilégie les questions d'application, de raisonnement, de démonstration et de synthèse. Évite les simples définitions. Inclus des questions qui demandent d'expliquer un mécanisme, résoudre un problème, justifier une affirmation ou relier plusieurs notions entre elles. Les questions doivent simuler les exigences du BEPC ou du BAC béninois.`,
-        feedbackStyle: `L'élève est de niveau Avancé. Sois exigeant et précis dans ta correction. Signale les imprécisions de vocabulaire. Fournis la réponse complète et détaillée avec les notions clés, formules ou schémas mentaux attendus. Tu peux pointer ce qui manque pour atteindre le niveau BAC.`,
-        remediationStyle: `L'élève est de niveau Avancé. Va en profondeur : explique le mécanisme complet, les cas particuliers, les pièges fréquents aux examens. L'exercice de remédiation doit être de niveau BAC ou BEPC.`,
-        numQuestions: 10,
-      };
-    case 'Intermédiaire':
-      return {
-        label: 'Intermédiaire',
-        questionStyle: `Génère des questions de niveau INTERMÉDIAIRE : mélange équilibré entre questions de définition/reconnaissance (40%) et questions d'application/explication (60%). Inclus des questions qui demandent de compléter, d'expliquer brièvement ou d'appliquer une notion à un exemple concret du quotidien béninois.`,
-        feedbackStyle: `L'élève est de niveau Intermédiaire. Sois pédagogique et encourageant. Fournis la réponse correcte complète avec les points clés. Explique pourquoi la réponse de l'élève était incomplète ou incorrecte. Termine par un encouragement personnalisé.`,
-        remediationStyle: `L'élève est de niveau Intermédiaire. Explique clairement le concept, donne un exemple tiré de la vie quotidienne au Bénin, puis propose un exercice d'application directe.`,
-        numQuestions: 10,
-      };
-    case 'Débutant':
-    default:
-      return {
-        label: 'Débutant',
-        questionStyle: `Génère des questions de niveau DÉBUTANT : privilégie les questions de définition, de reconnaissance et de mémorisation directe. Les questions doivent être formulées simplement, sans ambiguïté. Commence par les notions fondamentales. Chaque question doit porter sur une seule notion à la fois.`,
-        feedbackStyle: `L'élève est Débutant. Sois très encourageant, patient et bienveillant. Donne la réponse correcte de façon simple et claire. Explique le concept en termes accessibles, avec une analogie du quotidien si possible. Valorise ce qui était juste même si partiel.`,
-        remediationStyle: `L'élève est Débutant. Explique le concept très simplement, avec des mots du quotidien et une analogie concrète tirée de la vie au Bénin. L'exercice de remédiation doit être simple et direct, portant sur une seule notion.`,
-        numQuestions: 10,
-      };
-  }
-}
-
-
 async function startEvalSession(saKey, seqNum) {
   const { subject, classe } = evalState;
   evalState.saKey    = saKey;
@@ -17158,8 +16860,6 @@ async function startEvalSession(saKey, seqNum) {
   evalState.currentQ = 0;
   evalState.scores   = [];
   evalState.sessionActive = true;
-  const levelCfg = getLevelConfig(appState.currentLevel);
-  evalState.levelCfg = levelCfg;
 
   const prog = classe.programme;
   let programmeContext = '';
@@ -17226,7 +16926,7 @@ async function startEvalSession(saKey, seqNum) {
   loader.className = 'eval-loading';
   loader.innerHTML = `
     <div class="eval-loading-dots"><span></span><span></span><span></span></div>
-    <div style="font-size:13px;color:var(--text-soft);font-weight:600;">L'IA prépare tes questions · Niveau <strong>${levelCfg.label}</strong> · <em>${saLabel}</em>…</div>`;
+    <div style="font-size:13px;color:var(--text-soft);font-weight:600;">L'IA prépare tes 10 questions sur : <em>${saLabel}</em>…</div>`;
   body.appendChild(loader);
 
   try {
@@ -17240,7 +16940,7 @@ async function startEvalSession(saKey, seqNum) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 2500,
-        system: `Tu es un professeur expert du programme officiel béninois (MESTFP) pour la matière "${subject.name}", classe "${classe.niveau}". Tu dois générer exactement ${levelCfg.numQuestions} questions d'évaluation diagnostique tirées strictement du programme fourni. Réponds UNIQUEMENT en JSON valide, sans markdown, sans backticks, sans commentaire. Format strict : {"questions":[{"num":1,"sa":"SA1 — titre court","question":"texte de la question"},…]}. Les questions doivent couvrir des notions variées, être précises, formulées clairement en français, et adaptées au niveau béninois. ${levelCfg.questionStyle}`,
+        system: `Tu es un professeur expert du programme officiel béninois (MESTFP) pour la matière "${subject.name}", classe "${classe.niveau}". Tu dois générer exactement 10 questions d'évaluation diagnostique tirées strictement du programme fourni. Réponds UNIQUEMENT en JSON valide, sans markdown, sans backticks, sans commentaire. Format strict : {"questions":[{"num":1,"sa":"SA1 — titre court","question":"texte de la question"},…]}. Les questions doivent couvrir des notions variées, être précises, formulées clairement en français, et adaptées au niveau béninois. Mélange les types : définitions, calculs ou exercices, explications, applications concrètes.`,
         messages: [{
           role: 'user',
           content: `Génère 10 questions d'évaluation diagnostique pour ${saLabel} du programme de ${subject.name} — ${classe.niveau}.\n\nProgramme officiel à couvrir :\n${programmeContext}`
@@ -17371,7 +17071,7 @@ async function submitEvalAnswer(idx) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 1000,
-        system: `Tu es un professeur corrigeant une copie d'élève en ${subject.name} — ${classe.niveau} (programme officiel MESTFP Bénin). Réponds UNIQUEMENT en JSON valide sans markdown ni backticks. Format: {"verdict":"correct"|"partial"|"incorrect","score":2|1|0,"feedback":"explication détaillée (3-5 phrases) avec la bonne réponse complète, les formules importantes, et un encouragement final"}. ${(evalState.levelCfg || getLevelConfig(appState.currentLevel)).feedbackStyle} Cite les notions clés du programme.`,
+        system: `Tu es un professeur corrigeant une copie d'élève en ${subject.name} — ${classe.niveau} (programme officiel MESTFP Bénin). Réponds UNIQUEMENT en JSON valide sans markdown ni backticks. Format: {"verdict":"correct"|"partial"|"incorrect","score":2|1|0,"feedback":"explication détaillée (3-5 phrases) avec la bonne réponse complète, les formules importantes, et un encouragement final"}. Sois précis, bienveillant, pédagogique. Cite les notions clés du programme.`,
         messages: [{
           role: 'user',
           content: `Question : ${q.question}\n\nRéponse de l'élève : ${answer}\n\nÉvalue cette réponse.`
@@ -17481,7 +17181,6 @@ function showEvalBilan() {
     </div>` : ''}
     <div style="display:flex;flex-direction:column;gap:10px;">
       ${incorrect + partial > 0 ? `<button class="eval-next-btn" onclick="startRemediation()" style="background:linear-gradient(135deg,#E65100,#F57F17);font-size:15px;font-weight:800;">🔧 Corriger mes lacunes (${incorrect + partial} items)</button>` : ''}
-      <button class="eval-next-btn" onclick="downloadBilanPDF()" style="background:linear-gradient(135deg,#1565C0,#1E88E5);">📄 Télécharger mon bilan PDF</button>
       <button class="eval-next-btn" onclick="openEvalScreen()" style="background:linear-gradient(135deg,#1B5E20,#2E7D32);">🔁 Recommencer une session</button>
       <button class="eval-next-btn" onclick="goToScreen('subject')" style="background:var(--blue);">← Retour à la matière</button>
     </div>`;
@@ -17532,7 +17231,7 @@ async function showRemItem(idx) {
       headers: { 'Content-Type': 'application/json',   },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6', max_tokens: 1000,
-        system: `Tu es un professeur expert en remédiation pédagogique pour le programme officiel béninois (MESTFP), matière "${subject.name}", classe "${classe.niveau}". L'élève a raté ou partiellement réussi une question. Réponds UNIQUEMENT en JSON valide sans markdown ni backticks. Format strict : {"explication":"2-3 phrases claires sur le concept clé","exemple":"un exemple concret tiré du programme officiel béninois","exercice":"un nouvel exercice similaire mais différent de la question originale"}. ${(evalState.levelCfg || getLevelConfig(appState.currentLevel)).remediationStyle}`,
+        system: `Tu es un professeur expert en remédiation pédagogique pour le programme officiel béninois (MESTFP), matière "${subject.name}", classe "${classe.niveau}". L'élève a raté ou partiellement réussi une question. Réponds UNIQUEMENT en JSON valide sans markdown ni backticks. Format strict : {"explication":"2-3 phrases claires sur le concept clé","exemple":"un exemple concret tiré du programme officiel béninois","exercice":"un nouvel exercice similaire mais différent de la question originale"}`,
         messages: [{ role: 'user', content: `Question ratée : ${item.question}\nFeedback précédent : ${item.feedback}\n\nGénère la fiche de remédiation.` }]
       })
     });
@@ -17711,25 +17410,8 @@ function confirmQuitEval() {
 // ============================================================
 // UTILS
 // ============================================================
-function showNotifSummary() {
-  const history = getEvalHistory();
-  if (!history.length) {
-    showToast('🔔 Aucune activité pour l\'instant — lance une évaluation !');
-    return;
-  }
-  const last = history[0];
-  showToast(`📊 Dernière session : ${last.matiere} · ${last.score}% · ${last.date}`);
-}
-
 function addPoints(n) {
   appState.points += n;
-  // Also update streak after any eval
-  computeStreak();
-  const heroStreak = document.getElementById('hero-streak-val');
-  if (heroStreak) heroStreak.textContent = appState.streak;
-  const heroStreakEmoji = document.getElementById('hero-streak-emoji');
-  if (heroStreakEmoji) heroStreakEmoji.textContent = getStreakEmoji(appState.streak);
-  renderProfileBadges();
   saveState();
   document.getElementById('home-pts').textContent = appState.points;
   const pe = document.getElementById('prog-pts');
