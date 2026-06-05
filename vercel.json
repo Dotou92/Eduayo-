@@ -1,6 +1,6 @@
 {
   "rewrites": [
     { "source": "/", "destination": "/eduayo-auth-10.html" },
-    { "source": "/admin", "destination": "/admin-1.html" }
+    { "source": "/admin", "destination": "/admin-2.html" }
   ]
 }
