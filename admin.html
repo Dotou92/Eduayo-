@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EduAyo — Admin</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; color: #1a2332; }
+
+  /* LOGIN */
+  #login-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; background: linear-gradient(135deg, #007A4D, #00C97F);
+    padding: 24px;
+  }
+  #login-screen h1 { color: white; font-size: 24px; margin-bottom: 8px; }
+  #login-screen p { color: rgba(255,255,255,0.8); margin-bottom: 32px; font-size: 14px; }
+  #login-screen input {
+    width: 100%; max-width: 320px; padding: 16px; border-radius: 14px;
+    border: none; font-size: 16px; margin-bottom: 12px; outline: none;
+  }
+  #login-screen button {
+    width: 100%; max-width: 320px; padding: 16px; border-radius: 14px;
+    background: white; color: #007A4D; font-size: 16px; font-weight: 700;
+    border: none; cursor: pointer;
+  }
+  #login-error { color: #ffcccc; font-size: 13px; margin-top: 8px; display: none; }
+
+  /* DASHBOARD */
+  #dashboard { display: none; }
+  .topbar {
+    background: #007A4D; color: white; padding: 16px 20px;
+    display: flex; justify-content: space-between; align-items: center;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .topbar h1 { font-size: 18px; }
+  .topbar button {
+    background: rgba(255,255,255,0.2); color: white; border: none;
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  }
+
+  .content { padding: 16px; max-width: 600px; margin: 0 auto; }
+
+  /* STATS CARDS */
+  .stats-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;
+  }
+  .stat-card {
+    background: white; border-radius: 16px; padding: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06); text-align: center;
+  }
+  .stat-icon { font-size: 28px; margin-bottom: 6px; }
+  .stat-val { font-size: 28px; font-weight: 800; color: #007A4D; }
+  .stat-lbl { font-size: 12px; color: #888; margin-top: 4px; }
+
+  /* SECTION */
+  .section { background: white; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .section-title { font-size: 14px; font-weight: 700; color: #333; margin-bottom: 12px; }
+
+  /* TABLE */
+  .user-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .user-table th { background: #f0faf5; color: #007A4D; padding: 8px; text-align: left; font-weight: 700; }
+  .user-table td { padding: 8px; border-bottom: 1px solid #f0f0f0; }
+  .badge-premium { background: #FFF3CD; color: #856404; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+  .badge-gratuit { background: #f0f0f0; color: #888; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+
+  /* REFRESH */
+  .refresh-btn {
+    width: 100%; padding: 14px; background: #007A4D; color: white;
+    border: none; border-radius: 14px; font-size: 15px; font-weight: 700;
+    cursor: pointer; margin-bottom: 16px;
+  }
+
+  .loading { text-align: center; color: #888; padding: 20px; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<!-- ÉCRAN DE CONNEXION -->
+<div id="login-screen">
+  <div style="font-size:48px;margin-bottom:16px;">🛡️</div>
+  <h1>EduAyo Admin</h1>
+  <p>Accès réservé à l'administrateur</p>
+  <input type="password" id="admin-password" placeholder="Mot de passe admin"
+    onkeydown="if(event.key==='Enter') checkPassword()">
+  <button onclick="checkPassword()">Accéder →</button>
+  <div id="login-error">⚠️ Mot de passe incorrect</div>
+</div>
+
+<!-- TABLEAU DE BORD -->
+<div id="dashboard">
+  <div class="topbar">
+    <h1>💡 EduAyo Admin</h1>
+    <button onclick="logout()">Déconnexion</button>
+  </div>
+
+  <div class="content">
+
+    <button class="refresh-btn" onclick="loadData()">🔄 Actualiser les données</button>
+
+    <!-- STATS -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-icon">👥</div>
+        <div class="stat-val" id="stat-total">—</div>
+        <div class="stat-lbl">Élèves inscrits</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">⭐</div>
+        <div class="stat-val" id="stat-premium">—</div>
+        <div class="stat-lbl">Abonnés Premium</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">🆓</div>
+        <div class="stat-val" id="stat-gratuit">—</div>
+        <div class="stat-lbl">Comptes gratuits</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">💰</div>
+        <div class="stat-val" id="stat-revenus">—</div>
+        <div class="stat-lbl">Revenus/mois (FCFA)</div>
+      </div>
+    </div>
+
+    <!-- GRAPHIQUE PLANS -->
+    <div class="section">
+      <div class="section-title">📊 Répartition des abonnements</div>
+      <canvas id="plan-chart" height="200"></canvas>
+    </div>
+
+    <!-- LISTE ÉLÈVES -->
+    <div class="section">
+      <div class="section-title">👥 Liste des élèves</div>
+      <div id="users-list"><div class="loading">Chargement...</div></div>
+    </div>
+
+    <!-- INSCRIPTIONS RÉCENTES -->
+    <div class="section">
+      <div class="section-title">🆕 Inscriptions récentes (7 derniers jours)</div>
+      <div id="recent-list"><div class="loading">Chargement...</div></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const ADMIN_PASSWORD = 'sidosais92@';
+const SUPABASE_URL = 'https://dkxwltsmxnpqbgbeyqhx.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_Bs-4nFV-JlmeyuruLiJqdQ_rfhGmvB9';
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let planChart = null;
+
+function checkPassword() {
+  const pwd = document.getElementById('admin-password').value;
+  if (pwd === ADMIN_PASSWORD) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    loadData();
+  } else {
+    document.getElementById('login-error').style.display = 'block';
+    document.getElementById('admin-password').value = '';
+  }
+}
+
+function logout() {
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('admin-password').value = '';
+}
+
+async function loadData() {
+  document.getElementById('users-list').innerHTML = '<div class="loading">⏳ Chargement...</div>';
+  document.getElementById('recent-list').innerHTML = '<div class="loading">⏳ Chargement...</div>';
+
+  try {
+    // Fetch all profiles
+    const { data: profiles, error } = await supabase
+      .from('profils')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const total = profiles.length;
+    const premium = profiles.filter(p => p.plan === 'premium').length;
+    const gratuit = total - premium;
+    const revenus = premium * 2000;
+
+    // Update stats
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-premium').textContent = premium;
+    document.getElementById('stat-gratuit').textContent = gratuit;
+    document.getElementById('stat-revenus').textContent = revenus.toLocaleString('fr-FR');
+
+    // Chart
+    renderPlanChart(premium, gratuit);
+
+    // Users table
+    renderUsersTable(profiles);
+
+    // Recent signups (last 7 days)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const recent = profiles.filter(p => p.created_at >= sevenDaysAgo);
+    renderRecentList(recent);
+
+  } catch(e) {
+    document.getElementById('users-list').innerHTML = '<div class="loading">⚠️ Erreur : ' + e.message + '</div>';
+  }
+}
+
+function renderPlanChart(premium, gratuit) {
+  const canvas = document.getElementById('plan-chart');
+  if (planChart) planChart.destroy();
+  planChart = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: ['Premium ⭐', 'Gratuit 🆓'],
+      datasets: [{
+        data: [premium, gratuit],
+        backgroundColor: ['#007A4D', '#e0e0e0'],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom' }
+      }
+    }
+  });
+}
+
+function renderUsersTable(profiles) {
+  if (profiles.length === 0) {
+    document.getElementById('users-list').innerHTML = '<div class="loading">Aucun élève inscrit pour le moment.</div>';
+    return;
+  }
+  let html = '<table class="user-table"><thead><tr><th>Nom</th><th>Email</th><th>Plan</th><th>Inscription</th></tr></thead><tbody>';
+  profiles.forEach(p => {
+    const date = p.created_at ? new Date(p.created_at).toLocaleDateString('fr-FR') : '—';
+    html += `<tr>
+      <td>${p.nom || '—'}</td>
+      <td style="font-size:11px;">${p.email || '—'}</td>
+      <td><span class="${p.plan === 'premium' ? 'badge-premium' : 'badge-gratuit'}">${p.plan === 'premium' ? '⭐ Premium' : '🆓 Gratuit'}</span></td>
+      <td style="font-size:11px;">${date}</td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('users-list').innerHTML = html;
+}
+
+function renderRecentList(recent) {
+  if (recent.length === 0) {
+    document.getElementById('recent-list').innerHTML = '<div class="loading">Aucune inscription cette semaine.</div>';
+    return;
+  }
+  let html = '<table class="user-table"><thead><tr><th>Nom</th><th>Email</th><th>Plan</th></tr></thead><tbody>';
+  recent.forEach(p => {
+    html += `<tr>
+      <td>${p.nom || '—'}</td>
+      <td style="font-size:11px;">${p.email || '—'}</td>
+      <td><span class="${p.plan === 'premium' ? 'badge-premium' : 'badge-gratuit'}">${p.plan === 'premium' ? '⭐ Premium' : '🆓 Gratuit'}</span></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  document.getElementById('recent-list').innerHTML = html;
+}
+</script>
+</body>
+</html>
