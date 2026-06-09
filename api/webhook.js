@@ -1,10 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -15,17 +8,12 @@ export default async function handler(req, res) {
     const event = req.body;
     console.log('Webhook FedaPay reçu:', JSON.stringify(event));
 
-    // FedaPay envoie: { name: "transaction.approved", data: { transaction: {...} } }
-    const eventName = event.name || '';
     const transaction = event.data?.transaction || event['v1/transaction'] || {};
+    const eventName = event.name || '';
 
     if (eventName === 'transaction.approved' || transaction.status === 'approved') {
       const description = transaction.description || '';
-      const customerId = transaction.customer_id;
       const amount = transaction.amount;
-
-      // Récupérer l'email du client via customer_id
-      // FedaPay inclut parfois le customer dans la transaction
       const customerEmail = event.data?.customer?.email || transaction.customer?.email;
 
       if (!customerEmail) {
@@ -33,8 +21,63 @@ export default async function handler(req, res) {
         return res.status(200).json({ received: true });
       }
 
-      // Déterminer si c'est Premium ou Crédits
+      const SUPABASE_URL = process.env.SUPABASE_URL;
+      const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
+      const headers = {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`
+      };
+
       if (description.toLowerCase().includes('premium')) {
+        // Activer Premium pour 1 mois
+        const expireAt = new Date();
+        expireAt.setMonth(expireAt.getMonth() + 1);
+
+        await fetch(`${SUPABASE_URL}/rest/v1/profils?email=eq.${encodeURIComponent(customerEmail)}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({
+            plan: 'premium',
+            premium_expire_at: expireAt.toISOString()
+          })
+        });
+
+        console.log(`✅ Premium activé pour ${customerEmail}`);
+
+      } else if (description.toLowerCase().includes('cr') ) {
+        // Crédits — récupérer d'abord les crédits actuels
+        let creditsToAdd = 0;
+        if (amount >= 200) creditsToAdd = 12;
+        else if (amount >= 100) creditsToAdd = 5;
+
+        if (creditsToAdd > 0) {
+          // Récupérer crédits actuels
+          const getResp = await fetch(
+            `${SUPABASE_URL}/rest/v1/profils?email=eq.${encodeURIComponent(customerEmail)}&select=credits`,
+            { headers }
+          );
+          const profiles = await getResp.json();
+          const currentCredits = profiles[0]?.credits || 0;
+
+          // Mettre à jour
+          await fetch(`${SUPABASE_URL}/rest/v1/profils?email=eq.${encodeURIComponent(customerEmail)}`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({ credits: currentCredits + creditsToAdd })
+          });
+
+          console.log(`✅ ${creditsToAdd} crédits ajoutés pour ${customerEmail}`);
+        }
+      }
+    }
+
+    res.status(200).json({ received: true });
+  } catch(e) {
+    console.error('Webhook error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+}      if (description.toLowerCase().includes('premium')) {
         // Calculer la date d'expiration (1 mois)
         const expireAt = new Date();
         expireAt.setMonth(expireAt.getMonth() + 1);
