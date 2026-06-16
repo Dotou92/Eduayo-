@@ -3,7 +3,7 @@
     { "source": "/api/payment", "destination": "/api/payment.js" },
     { "source": "/api/proxy", "destination": "/api/proxy.js" },
     { "source": "/api/webhook", "destination": "/api/webhook.js" },
-    { "source": "/admin", "destination": "/admin-3-1.html" },
+    { "source": "/admin", "destination": "/admin-4.html" },
     { "source": "/", "destination": "/eduayo-auth-52.html" }
   ]
 }
