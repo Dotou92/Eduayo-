@@ -4,6 +4,6 @@
     { "source": "/api/proxy", "destination": "/api/proxy.js" },
     { "source": "/api/webhook", "destination": "/api/webhook.js" },
     { "source": "/admin", "destination": "/admin-5.html" },
-    { "source": "/", "destination": "/eduayo-auth-58.html" }
+    { "source": "/", "destination": "/eduayo-auth-59.html" }
   ]
 }
