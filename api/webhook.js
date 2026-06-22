@@ -17,9 +17,12 @@ export default async function handler(req, res) {
       const description = entity.description || '';
       const amount = entity.amount || 0;
       const customerEmail = entity.customer?.email
-        || entity.metadata?.paid_customer?.email;
+        || entity.metadata?.paid_customer?.email
+        || entity.metadata?.email;
+      // Classe transmise au moment du paiement (voir api/payment.js → custom_metadata)
+      const premiumClasse = entity.metadata?.premium_classe || null;
 
-      console.log('Email:', customerEmail, '| Desc:', description, '| Amount:', amount);
+      console.log('Email:', customerEmail, '| Desc:', description, '| Amount:', amount, '| Classe:', premiumClasse);
 
       if (!customerEmail) {
         console.log('Email non trouvé');
@@ -45,11 +48,12 @@ export default async function handler(req, res) {
             headers,
             body: JSON.stringify({
               plan: 'premium',
-              premium_expire_at: expireAt.toISOString()
+              premium_expire_at: expireAt.toISOString(),
+              premium_classe: premiumClasse
             })
           }
         );
-        console.log('Premium activé - Supabase status:', r.status);
+        console.log('Premium activé - Supabase status:', r.status, '- Classe:', premiumClasse);
 
       } else {
         let creditsToAdd = 0;
